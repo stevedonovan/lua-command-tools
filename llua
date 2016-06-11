@@ -294,7 +294,9 @@ function cmds.s(icol,file)
    for line in lines(file) do
       local key = line:match(patt)
       if numerical then key = tonumber(key) end
-      append(items,{line=line,key=key})
+      if key then
+        append(items,{line=line,key=key})
+      end
    end
    table.sort(items,
       descending
