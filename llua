@@ -1,0 +1,347 @@
+#!/usr/bin/lua53
+local usage = [[
+Lua stream commands
+llua <command> <flags> <file-or-argument>
+Commands:
+  m (patt) extract values with lua string patterns (alias lmatch)
+  g  (patt) (repl) substitute string pattern with replacement (alias lsub)
+       If -l is specified, replacement is an expression in 's'
+  f (repl) replacement string with implicit captures (alias lf)
+  e (expr) evaluate Lua expression (NO input) (alias lx)
+       This expression may have several parts separated by commas
+  c (pat) count occurances of value extracted with pattern (alias lcount)
+       If there are two matches, the first is the key and the
+       second is the value ('collect')
+  l (expr) evaluate expression in 'l' for each line (alias leval)
+  s (col) sort input by delimited column. Add 'n' for numeric sort (alias lsort)
+
+Flags:
+   -t a string value which becomes the single input line
+   -n output the line number as well
+   -o(delim) output delimiter - default is tab
+   -i(delim) input column delimiter (for f and s)
+   -l use a function in 's' for substitution (for g)
+   -x means print output in hex
+
+Expressions: functions in os and math table are directly available;
+will look up values in the environment if not found.
+
+Type 'llua ex' for examples
+]]
+
+local examples = [[
+# --- llua examples ---
+# matching:
+$ echo 'your name is Frodo' | llua m '(%u%a*)'
+Frodo
+# substitution:
+$ echo 'bonzo is a dog' | llua g '(%S+) is a (%S+)' '%2-%1'
+dog-bonzo
+$ llua g -l -t 'HOME is where the heart is' '(%u+)' 'getenv(s)'
+/home/steve is where the heart is
+# formatted column output
+$ echo 'one two three' | llua f '(%2)?%1:%3'
+(two)?one:three
+$ echo 'one,two,three' | llua f -i, '%1 %2 %3'
+one two three
+# expressions
+$ llua e 'sin(1.2)*pi'
+2.9280871453332
+$ llua e -x '0x100 + 0x200'
+0x300
+$ llua e 'time()+3600'
+1465477097
+$ llua e -o: '10,20,30'
+10:20:30
+# line function
+$ seq 1 4 | llua l 'l/pi, sin(l)/pi'
+0.31830988618379	0.26784853340116
+0.63661977236758	0.2894383604401
+0.95492965855137	0.044919893703792
+1.2732395447352	-0.24089771614508
+# sorting by column  (here by 2nd, numerical asc order)
+$ seq 1 5 | llua l 'random(),random()' | llua s 2n
+0.91164735793678	0.19755136929338
+0.84018771715471	0.39438292681909
+0.27777471080319	0.55396995579543
+0.33522275571489	0.7682295948119
+0.78309922375861	0.79844003347607
+]]
+
+-- these are uggestions for aliases. If you create
+-- soft links to llua on the path with these names
+-- then 'lm' means 'llua m' etc.
+local alias = {
+   lx = 'e',
+   lmatch = 'l',
+   lsub = 'g',
+   lcollect = 'c',
+   lfmt = 'f',
+   lsort = 's',
+   leval = 'l',
+}
+
+local function install(dest)
+    local function exec(cmd)
+        print(cmd)
+        os.execute(cmd)
+    end
+    exec('chmod +x llua')
+    exec('cp llua '..dest)
+    for a in pairs(alias) do
+        exec('ln -s '..dest..'/llua'..' '..dest..'/'..a)
+    end
+end
+
+local select, print, append = select, print, table.insert
+local unpack = table.unpack or unpack
+
+local prog = arg[0]:match '/([^/]+)$'
+local cmd = alias[prog]
+local start = 1
+if not cmd then
+   cmd = arg[1]
+   start = 2
+end
+
+if not cmd then
+   print 'must provide command'
+   print(usage)
+   return
+elseif cmd == 'ex' then
+   print(examples)
+   return
+elseif cmd == 'install' then
+    local dest = arg[2] or '~/bin'
+    print ('installing to '..dest)
+    install (dest)
+    return
+end
+
+local parms = {}
+local hex, lineno, lambda, input, idelim, odelim
+local i = start
+while i <= #arg do
+   local a = arg[i]
+   if a == '-x' then hex = true
+   elseif a == '-n' then lineno = true
+   elseif a == '-l' then lambda = true
+   elseif a == '-t' then
+      input = arg[i+1]
+      i = i + 1
+   elseif a == '-h' then
+      print(usage)
+      return
+   elseif a:sub(1,2) == '-i' then
+      idelim = a:sub(3)
+   elseif a:sub(1,2) == '-o' then
+      odelim = a:sub(3)
+      if odelim == '\\n' then odelim = '\n' end
+   else
+      append(parms,a)
+   end
+   i = i + 1
+end
+
+-- can specify float format specifically with env var LLUA_FMT
+-- we use '%g' with 5.3 to restore old behaviour when printing floats
+local ffmt = os.getenv 'LLUA_FMT' or (_VERSION=='Lua 5.3' and '%g')
+
+if hex or ffmt then
+   local old_tostring,type,format = _G.tostring,type,string.format
+   _G.tostring = function(s)
+      if type(s) == 'number' then
+         if hex then
+            return format('0x%X',s)
+         else
+            return format(ffmt,s)
+         end
+      else
+         return old_tostring(s)
+      end
+   end
+end
+
+
+if odelim then
+   local write,tostring = io.write,string
+   print = function(...)
+      local n = select('#',...)
+      local args = {...}
+      for i = 1,n do
+         write(tostring(args[i]))
+         if i < n then write(odelim) end
+      end
+      write('\n')
+   end
+end
+
+local function quit(msg, show_usage)
+   io.stderr:write('llua ',msg,'\n')
+   if show_usage then io.stderr:write(usage,'\n') end
+   os.exit(1)
+end
+
+setmetatable(_G,{
+   __index = function(self,k,v)
+      return os[k] or math[k] or os.getenv(k)
+         or quit("unknown variable "..k)
+   end
+})
+
+local lno = 1
+
+local function _print(...)
+   if select(1,...) then
+      if lineno then
+         print(lno,...)
+      else
+         print(...)
+      end
+   end
+   lno = lno + 1
+end
+
+local function lines(file)
+   if input then
+      return function()
+         local res = input
+         input = nil
+         return res
+      end
+   end
+   if file then
+      return io.lines(file)
+   else
+      return io.lines()
+   end
+end
+
+local function make_column_match(max,only_last)
+   local res,delim,patt
+   if idelim then
+      res = ''
+      delim = idelim
+      patt = '[^'..delim..']+'
+   else -- just spaces
+      res = '^%s*'
+      delim = '%s+'
+      patt = '%S+'
+   end
+   local last_capture = '('..patt..')'
+   local capture = only_last and patt or last_capture
+   for i = 1,max do
+      res = res .. (i < max and capture..delim or last_capture)
+   end
+   return res
+end
+
+local cmds = {}
+
+function cmds.m(patt,file)
+   if not patt then quit('expecting pattern') end
+   for line in lines(file) do
+      _print(line:match(patt))
+   end
+end
+
+local function compile (args,expr)
+   local fn = 'return function('..args..') return '..expr..' end'
+   local chunk,e = load(fn)
+   if e then
+      quit("compile error "..e)
+   end
+   return chunk()
+end
+
+function cmds.l (expr,file)
+   if not expr then quit('expecting expression') end
+   local fun = compile('l,ll,lno',expr)
+   local last
+   for line in lines(file) do
+      _print(fun(line,last,lno))
+      last = line
+   end
+end
+
+function cmds.c(patt,file)
+   if not patt then quit('expecting pattern') end
+   local items = {}
+   for line in lines(file) do
+      local m,val = line:match(patt)
+      if m then
+         if val then
+            items[m] = val
+         else
+            items[m] = (items[m] or 0) + 1
+         end
+      end
+   end
+   for m,c in pairs(items) do
+      print(m,c)
+   end
+end
+
+function cmds.s(icol,file)
+   if not icol then quit('expecting column') end
+   local items,postfix = {}
+   icol,postfix = icol:match '(%d+)(.*)'
+   if not icol then quit('col did not start with a number') end   
+   local numerical = postfix:match'n'
+   local descending = postfix:match'd'
+   icol = tonumber(icol)
+   local patt = make_column_match(icol,true)
+   for line in lines(file) do
+      local key = line:match(patt)
+      if numerical then key = tonumber(key) end
+      append(items,{line=line,key=key})
+   end
+   table.sort(items,
+      descending
+         and
+            (function(a,b) return a.key > b.key end)
+         or
+            (function(a,b) return a.key < b.key end))
+   for i = 1,#items do
+      print(items[i].line)
+   end
+end
+
+function cmds.g(patt,repl,file)
+   if not patt or not repl then quit('expecting pattern/replacement') end
+   if lambda then -- -l flag
+      repl = compile('s',repl)
+   end
+   for line in lines(file) do
+      line = line:gsub(patt,repl)
+      if line then print(line) end
+   end
+end
+
+function cmds.f(repl,file)
+   if not repl then quit('expecting string') end
+   -- maximum number of captures?
+   local max = 1
+   repl:gsub('%%(%d+)',function(idx)
+      idx = tonumber(idx)
+      if idx > max then max = idx end
+   end)
+   local patt = make_column_match(max)
+   cmds.g(patt..'.*',repl,file)
+end
+
+function cmds.e (expr)
+   if not expr then quit('expecting expression') end
+   local fn,e = load('return '..expr)
+   if e then
+      quit(e)
+   end   
+   print(fn())
+end
+
+local op = cmds[cmd]
+if op then
+   op(unpack(parms))
+else
+   quit('unknown command '..(op or '?'),true)
+end
