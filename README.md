@@ -204,3 +204,9 @@ I've found these to be the most useful Lua one-liners; where they overlap existi
 standard tools, I've included them where they offer more functionality than the
 standard.  I resisted the temptation to reinvent `awk` - the implicitly split fields are
 not available in calculations.
+
+[Lua patterns](http://man.openbsd.org/patterns.7) are also used for URL rewriting in OpenBSD's
+`httpd` daemon.
+
+[sbp](https://f.juef.tk/sbp/) by Svyatoslav Mishyn already implements `lmatch`
+using the OpenBSD modified Lua string pattern matching code.
