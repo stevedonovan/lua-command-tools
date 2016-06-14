@@ -1,6 +1,6 @@
 ## Fitting in with Existing Ecosystem
 
-The Unix command-line philosophy is to combine small specialized programs 
+The Unix command-line philosophy is to combine small specialized programs
 with pipelines and i/o redirection.  Tools like `cat`, `head`, `grep`, etc are
 universally available and play well together.  `awk` occupies a special place:
 it _is_ possible to write programs using 'awk', but it
@@ -8,9 +8,9 @@ is nowadays mostly used for powerful one-liners, particularly for data with deli
 columns like tab or space separated files.
 
 So any new tool should not do what can already be easily done with the standard
-toolbox. 
+toolbox.
 In particular, making it easier to use a programming language for one-liners
-should not reinvent `awk` (this has already happened with `perl`, but I don't care for 
+should not reinvent `awk` (this has already happened with `perl`, but I don't care for
 dollar-languages).  It turns out that this is easier said than done.
 
 `llua` is a small Swiss Army-style command utility which exposes the expressive
@@ -31,7 +31,7 @@ notation, with '%' being the escape character rather than '\'.
 
 `llua m` applies the Lua `string.match` function to every line in its input.
 Here we're picking out proper names, defined as an upper case letter followed by
-one or more lower-case letters. The second example picks out _two_ values defined as 
+one or more lower-case letters. The second example picks out _two_ values defined as
 one or more non-space characters. Here we must use parentheses to indicate the
 captured groups.
 
@@ -57,7 +57,7 @@ $ mount | lmatch '(/dev/%S+) on (%S+)'
 ## Lua-style global substitution
 
 `sed` is the designated tool of choice, but I think there's sufficient complementary
-power provided by `string.gsub` to warrant exposing it on the command-line. `lsub` 
+power provided by `string.gsub` to warrant exposing it on the command-line. `lsub`
 is the alias for `llua g':
 
 ```sh
@@ -81,7 +81,7 @@ $ lsub -t 'HOME is where the heart is'  -l '(%u+)' 'getenv(s)'
 
 `llua` makes all the functions in the `math` and `os` tables available globally
 for your convenience.  [os.date](https://www.lua.org/manual/5.3/manual.html#pdf-os.date)
-can convert timestamps into human date/time using the same flags as `strftime`.  This is 
+can convert timestamps into human date/time using the same flags as `strftime`.  This is
 useful for preprocessing log files which don't bother to present time in a friendly way.
 
 ```sh
@@ -105,7 +105,7 @@ $ seq 1 5 | leval '10*l, 100*l'
 ```
 This only works because Lua will auto-convert strings into numbers if the context demands
 it - arguably a misfeature with non-trivial programs, but very convenient for the current
-use!  
+use!
 
 Note that it is easy to produce multiple output items - just separate expressions with
 commas.  What if we wanted another output delimiter? CSV is a popular format:
@@ -151,8 +151,8 @@ have delimited columns.
 
 ## Evaluating Lua expressions
 
-This is the odd one out. `llua e` (alias `lx`) does not consume standard input. 
-I include it because it's simply more powerful than `expr` - the standard mathematical 
+This is the odd one out. `llua e` (alias `lx`) does not consume standard input.
+I include it because it's simply more powerful than `expr` - the standard mathematical
 functions are available, hex literals, and if you are using Lua 5.3, bit operators as well.
 
 ```sh
@@ -165,6 +165,38 @@ $ lx -x '0x100 + 0x200'
 ```
 The `-x` flag forces hexadecimal output; as with `leval`, multiple expressions can
 be evaluated and the output delimiter is controlled with `-o`.
+
+## Environment and Flags
+
+All operations understand the  environment variable `LLUA_FMT` which is a
+custom format to use for printing floating-point values:
+
+```sh
+LLUA_FMT='%4.2f' lx 'sin(0.234),cos(0.234)'
+0.23	0.97
+```
+
+If `LLUA_CONFIG` is defined, `llua` will read a configuration file at that location.
+If it's just 1, then `llua` will use the default location `~/.lluarc`. It may contain
+any Lua definitions:
+
+```
+$ cat ~/.lluac
+K=1024
+function s(x) return x*x end
+$ export LLUA_CONFIG=1
+$ lx 's(K)'
+1048576
+```
+This is very useful if you have some custom constants and operations that you
+would like at your fingertips.
+
+Every operation except `lx` understands `-n` which prints out the line number
+as well.
+
+All operations understand `-o` for output delimiter, for instance `-o,`. The
+column-oriented input readers like `lfmt` and `lsort` also understand the
+equivalent `-i` for input delimiter.
 
 ## Conclusion
 
