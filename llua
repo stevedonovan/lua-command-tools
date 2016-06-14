@@ -93,6 +93,13 @@ local function install(dest)
     end
 end
 
+local function quit(msg, show_usage)
+   io.stderr:write('llua ',msg,'\n')
+   if show_usage then io.stderr:write(usage,'\n') end
+   os.exit(1)
+end
+
+
 local select, print, append, getenv = select, print, table.insert, os.getenv
 local unpack = table.unpack or unpack
 
@@ -143,21 +150,31 @@ while i <= #arg do
    i = i + 1
 end
 
+-- relaxed access to Lua library functions
+setmetatable(_G,{
+   __index = function(self,k,v)
+      return os[k] or math[k] or getenv(k)
+         or quit("unknown variable "..k)
+   end
+})
+
 -- can specify float format specifically with env var LLUA_FMT
 -- we use '%g' with 5.3 to restore old behaviour when printing floats
 local ffmt = getenv 'LLUA_FMT' or (_VERSION=='Lua 5.3' and '%g')
+
+-- optionally load configuration containing Lua definitions
 local lcnfig = getenv 'LLUA_CONFIG'
 if lcnfig == '1' then
    lcnfig = getenv 'HOME' ..'/.lluarc'
 end
 if lcnfig then
-   local f,e = io.open(lcnfig,'r')
+   local f,chunk,ok,e
+   f,e = io.open(lcnfig,'r')
+   if e then quit(lcnfig..': '..e) end
+   chunk,e = load(f:read '*a',lcnfig,'t',_G)
    if e then quit(e) end
-   local ok,e = pcall(function()
-      local chunk = load(f:read '*a','[config]','t',_G)
-      chunk()
-   end)
-   if not ok then quit(e) end
+   ok, e = pcall(chunk)
+   if not ok then quit(lcnfig..': '..e) end
    f:close()
 end
 
@@ -189,19 +206,6 @@ if odelim then
       write('\n')
    end
 end
-
-local function quit(msg, show_usage)
-   io.stderr:write('llua ',msg,'\n')
-   if show_usage then io.stderr:write(usage,'\n') end
-   os.exit(1)
-end
-
-setmetatable(_G,{
-   __index = function(self,k,v)
-      return os[k] or math[k] or os.getenv(k)
-         or quit("unknown variable "..k)
-   end
-})
 
 local lno = 1
 
