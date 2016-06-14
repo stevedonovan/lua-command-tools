@@ -11,7 +11,7 @@ So any new tool should not do what can already be easily done with the standard
 toolbox.
 In particular, making it easier to use a programming language for one-liners
 should not reinvent `awk` (this has already happened with `perl`, but I don't care for
-dollar-languages).  It turns out that this is easier said than done.
+dollar-languages).
 
 `llua` is a small Swiss Army-style command utility which exposes the expressive
 power of Lua to command-line scripters.
@@ -91,7 +91,8 @@ $ echo '1465637777 had a bath' | lsub -l '^(%d+)' 'date("%T",s)'
 ## Evaluating some expression for each line
 
 `llua l` (alias `leval`) evaluates an expression for each line; same relaxed rule for function
-visibility as with `lsub -l`.
+visibility as with `lsub -l`. The expression is an implicit function of
+l (the line), ll (the _last_ line) and lno (the line number).
 
 ```sh
 $ leval -t 'hello dolly' 'l:sub(1,4):upper()'
@@ -106,6 +107,10 @@ $ seq 1 5 | leval '10*l, 100*l'
 This only works because Lua will auto-convert strings into numbers if the context demands
 it - arguably a misfeature with non-trivial programs, but very convenient for the current
 use!
+
+As a special case, if the expression is `true` then `leval` prints
+out the line.  For instance "leval 'lno>=10 && lno<=20'" will filter lines
+10 to 20 inclusive; "leval 'lno % 10 == 0'" will print every 10th line.
 
 Note that it is easy to produce multiple output items - just separate expressions with
 commas.  What if we wanted another output delimiter? CSV is a popular format:
@@ -189,7 +194,8 @@ $ lx 's(K)'
 1048576
 ```
 This is very useful if you have some custom constants and operations that you
-would like at your fingertips.
+would like at your fingertips. The relaxed lookup rules apply in this
+file as well.
 
 Every operation except `lx` understands `-n` which prints out the line number
 as well.

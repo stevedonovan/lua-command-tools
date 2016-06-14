@@ -207,14 +207,22 @@ if odelim then
    end
 end
 
-local lno = 1
+local lno,current_line  = 1
 
 local function _print(...)
    if select(1,...) then
-      if lineno then
-         print(lno,...)
+      if select(1,...) == true then
+         if lineno then
+            print(lno,current_line)
+         else
+            print(current_line)
+         end
       else
-         print(...)
+         if lineno then
+            print(lno,...)
+         else
+            print(...)
+         end
       end
    end
    lno = lno + 1
@@ -277,6 +285,7 @@ function cmds.l (expr,file)
    local fun = compile('l,ll,lno',expr)
    local last
    for line in lines(file) do
+      current_line = line
       _print(fun(line,last,lno))
       last = line
    end
