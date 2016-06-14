@@ -1,4 +1,4 @@
-#!/usr/bin/lua53
+#!/usr/bin/lua
 local usage = [[
 Lua stream commands
 llua <command> <flags> <file-or-argument>
@@ -93,7 +93,7 @@ local function install(dest)
     end
 end
 
-local select, print, append = select, print, table.insert
+local select, print, append, getenv = select, print, table.insert, os.getenv
 local unpack = table.unpack or unpack
 
 local prog = arg[0]:match '/([^/]+)$'
@@ -145,7 +145,21 @@ end
 
 -- can specify float format specifically with env var LLUA_FMT
 -- we use '%g' with 5.3 to restore old behaviour when printing floats
-local ffmt = os.getenv 'LLUA_FMT' or (_VERSION=='Lua 5.3' and '%g')
+local ffmt = getenv 'LLUA_FMT' or (_VERSION=='Lua 5.3' and '%g')
+local lcnfig = getenv 'LLUA_CONFIG'
+if lcnfig == '1' then
+   lcnfig = getenv 'HOME' ..'/.lluarc'
+end
+if lcnfig then
+   local f,e = io.open(lcnfig,'r')
+   if e then quit(e) end
+   local ok,e = pcall(function()
+      local chunk = load(f:read '*a','[config]','t',_G)
+      chunk()
+   end)
+   if not ok then quit(e) end
+   f:close()
+end
 
 if hex or ffmt then
    local old_tostring,type,format = _G.tostring,type,string.format
@@ -286,7 +300,7 @@ function cmds.s(icol,file)
    if not icol then quit('expecting column') end
    local items,postfix = {}
    icol,postfix = icol:match '(%d+)(.*)'
-   if not icol then quit('col did not start with a number') end   
+   if not icol then quit('col did not start with a number') end
    local numerical = postfix:match'n'
    local descending = postfix:match'd'
    icol = tonumber(icol)
@@ -337,7 +351,7 @@ function cmds.e (expr)
    local fn,e = load('return '..expr)
    if e then
       quit(e)
-   end   
+   end
    print(fn())
 end
 
