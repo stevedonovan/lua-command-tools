@@ -207,22 +207,14 @@ if odelim then
    end
 end
 
-local lno,current_line  = 1
+local lno,current_line,current_file  = 1,'',''
 
 local function _print(...)
    if select(1,...) then
-      if select(1,...) == true then
-         if lineno then
-            print(lno,current_line)
-         else
-            print(current_line)
-         end
+      if lineno then
+         print(current_file..lno..':',...)
       else
-         if lineno then
-            print(lno,...)
-         else
-            print(...)
-         end
+         print(...)
       end
    end
    lno = lno + 1
@@ -237,6 +229,7 @@ local function lines(file)
       end
    end
    if file then
+      current_file = file..':'
       return io.lines(file)
    else
       return io.lines()

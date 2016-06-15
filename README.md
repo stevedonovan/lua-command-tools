@@ -108,10 +108,6 @@ This only works because Lua will auto-convert strings into numbers if the contex
 it - arguably a misfeature with non-trivial programs, but very convenient for the current
 use!
 
-As a special case, if the expression is `true` then `leval` prints
-out the line.  For instance "leval 'lno>=10 && lno<=20'" will filter lines
-10 to 20 inclusive; "leval 'lno % 10 == 0'" will print every 10th line.
-
 Note that it is easy to produce multiple output items - just separate expressions with
 commas.  What if we wanted another output delimiter? CSV is a popular format:
 
