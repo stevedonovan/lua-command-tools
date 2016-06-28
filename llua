@@ -127,12 +127,19 @@ end
 
 local parms = {}
 local hex, lineno, lambda, input, idelim, odelim
+local split, column_headers
 local i = start
 while i <= #arg do
    local a = arg[i]
    if a == '-x' then hex = true
    elseif a == '-n' then lineno = true
    elseif a == '-l' then lambda = true
+   elseif a == '-s' then split = true
+   elseif a == '-c' then
+      column_headers = true
+      split = true
+      idelim = ','
+      odelim = ','
    elseif a == '-t' then
       input = arg[i+1]
       i = i + 1
@@ -266,7 +273,7 @@ end
 
 local function compile (args,expr)
    local fn = 'return function('..args..') return '..expr..' end'
-   local chunk,e = load(fn)
+   local chunk,e = load(fn,"<expr>")
    if e then
       quit("compile error "..e)
    end
@@ -275,13 +282,55 @@ end
 
 function cmds.l (expr,file)
    if not expr then quit('expecting expression') end
-   local fun = compile('l,ll,lno',expr)
-   local last
-   for line in lines(file) do
-      current_line = line
-      _print(fun(line,last,lno))
-      last = line
+   local iter = lines(file)
+   local patt
+   if split then
+      local max,max_of = 1, math.max
+      local ofields = {}
+      if column_headers then
+         -- split the column names
+         local line = iter()
+         local columns,i = {},0
+         for col in line:gmatch '[^,]+' do
+            i = i + 1
+            col = col:gsub('%W','_')
+            columns[col] = i
+         end
+         -- extract output column names
+         expr = expr:gsub(' as (%a+)',function(col)
+            append(ofields,col)
+            return ''
+         end)
+         -- and patch F.IDEN!
+         expr = expr:gsub('F%.([%a_][%w_]*)',function(col)
+            local icol = columns[col] 
+            max = max_of(max,icol)
+            return 'F['..icol..']'
+         end)
+         if #ofields > 0 then
+            print(table.concat(ofields,','))
+         end         
+      else -- maximum number of fields needed from F[idx]
+         expr:gsub('F%[(%d+)%]',function(idx)
+            max = max_of(max,tonumber(idx))
+         end)
+      end
+      patt = make_column_match(max)
    end
+   local fun = compile('l,ll,lno,F',expr)
+   local last
+   local ok,err = pcall(function()
+      local F = {}
+      for line in iter do
+         if split then
+            F = {line:match(patt)}
+         end
+         current_line = line
+         _print(fun(line,last,lno,F))
+         last = line
+      end
+    end)
+    if err then quit(err) end
 end
 
 function cmds.c(patt,file)

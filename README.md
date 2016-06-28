@@ -120,6 +120,36 @@ $ seq 1 4 | leval -o, 'l/pi, sin(l)/pi'
 ```
 `-o` applies to the other subcommands as well.
 
+I did not intend to re-invent Awk, but manipulating pre-split columns is very convenient.
+The `-s` flag splits the input according to the input delimiter (set with `-i`)
+
+```sh
+$ echo "10 20" | leval -s "2*F[1], 3*F[2]"
+20	60
+```
+CSV files are convenient, if you don't rely on differences involving quoting values. 
+The `-c` flag implies `-s` and "-i, -o,".  It assumes that the the first line contains the column
+names. In this case, you can access the fields by name - if the original names contain
+spaces or odd characters, they will be replaced by underscores. Also, there's an option
+to specify _output_ column names using a SQL-like notation.
+ 
+```sh
+scratch$ cat tmp.csv
+X,Y
+0.840188,1.183149
+0.783099,2.39532
+0.911647,0.592653
+0.335223,2.30469
+scratch$ leval -c 'F.Y - 2*F.X as A, F.X-F.Y as B' tmp.csv
+A,B
+-0.497227,-0.342961
+0.829122,-1.612221
+-1.230641,0.318994
+1.634244,-1.969467
+
+If you don't use the 'as name' notation for each output field, then no header is 
+written out.
+
 ## Sorting by column
 
 As with `lsub/sed`, there is already `sort` - it can sort on columns. But the meaning
@@ -127,9 +157,11 @@ of column here is 'character column' not 'delimited column'. This seems rather f
 this point in computing history, to have to work with fixed-format data (which was hip
 when guys wrote FORTRAN wearing ties.)
 
+Hence 'llua s', aliased as `lsort`.
+
 First of all, make some random data, and first sort on second column, ascending,
 and then sort on first column, descending. (We need 'n' to specify that this is
-to be intepreted as numbers.)
+to be intepreted as numbers - without 'n' it uses usual string comparison.)
 
 ```sh
 scratch$ seq 1 5 | leval 'random(),random()' > rand.txt
@@ -146,9 +178,43 @@ scratch$ lsort 1nd rand.txt
 0.335223	0.76823
 0.277775	0.55397
 ```
-`lsort` is not a speed demon. It takes about a second to sort 100,000 records on my
-somewhat inadequate laptop. But it is a lot easier to use than `sort` when you
+`lsort` is not a speed demon.  But it is a lot easier to use than `sort` when you
 have delimited columns.
+
+## Collecting instances of a captured value
+
+`llua c` aka `lcollect` is occasionally useful. It extracts a value like `lmatch`, but
+counts how often each unique value occurs. These are words that appear first
+on each line of this readme.
+
+```sh
+$ lcollect '%a+' README.md
+as	1
+sed	1
+lsub	2
+to	2
+On	1
+Lua	3
+HELL	1
+is	2
+LLUA	1
+....
+```
+We can combine our cool tools into pipelines, naturally.
+
+```sh
+$ cat README.md | tr ' ' '\n' | lcollect '%a+' | lsort 2nd | head
+the	54
+is	40
+a	28
+to	25
+as	17
+for	17
+llua	17
+and	15
+sh	15
+with	14
+```
 
 ## Evaluating Lua expressions
 
@@ -157,8 +223,10 @@ I include it because it's simply more powerful than `expr` - the standard mathem
 functions are available, hex literals, and if you are using Lua 5.3, bit operators as well.
 
 ```sh
+$# all functions and constants from math.* are available
 $ lx 'sin(1.2)*pi + 1'
 3.92809
+$# As well as os.*; this is 'one hour in the future'
 $ lx 'time()+3600'
 1465477097
 $ lx -x '0x100 + 0x200'
@@ -204,8 +272,10 @@ equivalent `-i` for input delimiter.
 
 I've found these to be the most useful Lua one-liners; where they overlap existing
 standard tools, I've included them where they offer more functionality than the
-standard.  I resisted the temptation to reinvent `awk` - the implicitly split fields are
-not available in calculations.
+standard. 
+
+I did not resist the temptation to reinvent `awk`, since the functionality was so
+convenient.
 
 [Lua patterns](http://man.openbsd.org/patterns.7) are also used for URL rewriting in OpenBSD's
 `httpd` daemon.
