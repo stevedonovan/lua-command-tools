@@ -280,5 +280,5 @@ convenient.
 [Lua patterns](http://man.openbsd.org/patterns.7) are also used for URL rewriting in OpenBSD's
 `httpd` daemon.
 
-[sbp](https://f.juef.tk/sbp/) by Svyatoslav Mishyn already implements `lmatch`
+[sbp](https://f.juef.space/sbp/) by Svyatoslav Mishyn already implements `lmatch`
 using the OpenBSD modified Lua string pattern matching code.
